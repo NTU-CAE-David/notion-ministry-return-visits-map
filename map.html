@@ -92,7 +92,7 @@
       const latlng = [parseFloat(match[1]), parseFloat(match[2])];
       const color = getColorByAssign(item['Assign to']);
       const gmap = item['Google Map'] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item['地址'])}`;
-      const notionUrl = item['notion database'] || '#';
+      const notionUrl = item['notion database'] || 'https://www.notion.so/ntu-cae-david/1d5476806c8d4e08a2c1689efd62e268?v=c7100548bfdc4712a041e4aff362f967&pvs=4';
 
       const marker = L.circleMarker(latlng, {
         radius: 8,
