@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Notion_續訪地址互動地圖</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh;
+    }
+    .popup-content {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Geocoding Plugin -->
+  <script src="https://unpkg.com/esri-leaflet-geocoder/dist/esri-leaflet-geocoder.js"></script>
+
+  <script>
+    const map = L.map('map').setView([25.038, 121.563], 12); // 預設台北
+
+    // OpenStreetMap 底圖
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data © OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // 你的 Google Apps Script JSON 連結
+    const dataUrl = "https://script.google.com/a/macros/caece.net/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
+
+    // 將地址轉為經緯度（使用 Nominatim API）
+    async function geocode(address) {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+      const response = await fetch(url);
+      const results = await response.json();
+      if (results && results[0]) {
+        return [parseFloat(results[0].lat), parseFloat(results[0].lon)];
+      } else {
+        return null;
+      }
+    }
+
+    async function loadData() {
+      const response = await fetch(dataUrl);
+      const records = await response.json();
+
+      for (const item of records) {
+        const address = item['地址'];
+        const latlng = await geocode(address);
+        if (!latlng) continue;
+
+        // 建立 popup 文字
+        let popupHtml = "<div class='popup-content'>";
+        for (const key in item) {
+          if (item[key]) {
+            popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
+          }
+        }
+        popupHtml += "</div>";
+
+        L.marker(latlng).addTo(map).bindPopup(popupHtml);
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
