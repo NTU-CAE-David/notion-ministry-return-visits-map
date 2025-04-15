@@ -15,6 +15,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="map"></div>
 
@@ -31,54 +32,39 @@
     // JSON API 連結
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
 
-    // 將地址轉為經緯度（使用 Nominatim）
-    async function geocode(address) {
-      const fullAddress = address; // 如果地址不完整，自動補齊
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&format=json`;
-      try {
-        const response = await fetch(url);
-        const results = await response.json();
-        if (results && results[0]) {
-          return [parseFloat(results[0].lat), parseFloat(results[0].lon)];
-        }
-      } catch (e) {
-        console.warn("地理編碼錯誤：", e);
-      }
-      return null;
-    }
-
     async function loadData() {
-      try {
-        const response = await fetch(dataUrl);
-        const records = await response.json();
-    
-        console.log("✅ JSON 資料數量：", records.length);
-    
-        for (const item of records) {
-          const address = item['地址'];
-          console.log("查詢地址：", address);
-    
-          const latlng = await geocode(address);
-    
-          if (!latlng) {
-            console.warn("❌ 地址轉換失敗：", address);
-            continue;
-          }
-    
-          console.log("✅ 地址成功轉換：", address, latlng);
-    
-          let popupHtml = "<div class='popup-content'>";
-          for (const key in item) {
-            if (item[key]) {
-              popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
-            }
-          }
-          popupHtml += "</div>";
-    
-          L.marker(latlng).addTo(map).bindPopup(popupHtml);
+      const response = await fetch(dataUrl);
+      const records = await response.json();
+
+      console.log("✅ 共載入資料筆數：", records.length);
+
+      for (const item of records) {
+        const latlngRaw = item['(lat, lng)'];
+        if (!latlngRaw) {
+          console.warn("⚠️ 缺少經緯度欄位，略過：", item["地址"]);
+          continue;
         }
-      } catch (e) {
-        console.error("資料載入錯誤：", e);
+
+        const match = latlngRaw.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
+        if (!match) {
+          console.warn("❌ 無法解析經緯度格式：", latlngRaw);
+          continue;
+        }
+
+        const lat = parseFloat(match[1]);
+        const lng = parseFloat(match[2]);
+        const latlng = [lat, lng];
+
+        // 建立 popup HTML
+        let popupHtml = "<div class='popup-content'>";
+        for (const key in item) {
+          if (item[key]) {
+            popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
+          }
+        }
+        popupHtml += "</div>";
+
+        L.marker(latlng).addTo(map).bindPopup(popupHtml);
       }
     }
 
