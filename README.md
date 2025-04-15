@@ -20,7 +20,7 @@
 
 ```
 notion-map-project/
-├─ index.html         # Leaflet 地圖前端頁面
+├─ map.html         # Leaflet 地圖前端頁面
 ├─ AppScript.gs       # Google Apps Script 腳本（擷取 Notion 並寫入 Sheet）
 └─ README.md          # 本說明文件
 ```
@@ -82,7 +82,7 @@ const DATABASE_ID = "你的 Notion Database ID";
 
 ## 🌍 HTML 地圖部署說明
 
-1. 將 `index.html` 上傳至 GitHub Pages、Netlify 或任何靜態網站平台。
+1. 將 `map.html` 上傳至 GitHub Pages、Netlify 或任何靜態網站平台。
 2. 修改程式中的資料來源：
 
 ```javascript
