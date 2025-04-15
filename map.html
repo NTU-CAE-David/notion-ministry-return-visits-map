@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Notion 經緯度地圖 Pro 版</title>
+  <title>Notion 續訪地址互動地圖 Pro 版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
@@ -21,7 +21,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       border-radius: 6px;
     }
-    input {
+    input, select {
       margin-bottom: 5px;
       width: 160px;
       padding: 3px;
@@ -50,15 +50,17 @@
   <div class="controls">
     <input type="text" id="nameFilter" placeholder="搜尋姓名...">
     <input type="text" id="cardFilter" placeholder="搜尋區域卡...">
+    <select id="sortOption">
+      <option value="">排序方式</option>
+      <option value="星等">星等</option>
+      <option value="拜訪日期">拜訪日期</option>
+    </select>
+    <select id="assignGroup">
+      <option value="">指派人員</option>
+    </select>
   </div>
   <div id="map"></div>
-  <div class="legend">
-    <div><span style="background:#aaa"></span> 🌟</div>
-    <div><span style="background:#87CEEB"></span> 🌟🌟</div>
-    <div><span style="background:#1E90FF"></span> 🌟🌟🌟</div>
-    <div><span style="background:#4169E1"></span> 🌟🌟🌟🌟</div>
-    <div><span style="background:#8A2BE2"></span> 🌟🌟🌟🌟🌟</div>
-  </div>
+  <div class="legend" id="legend"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
@@ -71,19 +73,15 @@
     }).addTo(map);
 
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
-
     const markers = L.markerClusterGroup();
-    const markerList = [];
+    let markerList = [];
+    const assignColorMap = {};
 
-    function getColorByRating(rating) {
-      switch (rating) {
-        case "🌟": return "#aaa";
-        case "🌟🌟": return "#87CEEB";
-        case "🌟🌟🌟": return "#1E90FF";
-        case "🌟🌟🌟🌟": return "#4169E1";
-        case "🌟🌟🌟🌟🌟": return "#8A2BE2";
-        default: return "gray";
+    function getColorByAssign(assign) {
+      if (!assignColorMap[assign]) {
+        assignColorMap[assign] = '#' + Math.floor(Math.random()*16777215).toString(16);
       }
+      return assignColorMap[assign];
     }
 
     function createMarker(item) {
@@ -92,18 +90,16 @@
       if (!match) return null;
 
       const latlng = [parseFloat(match[1]), parseFloat(match[2])];
-      const color = getColorByRating(item['星等']);
+      const color = getColorByAssign(item['Assign to']);
       const gmap = item['Google Map'] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item['地址'])}`;
       const notionUrl = item['notion database'] || '#';
 
-      const icon = L.divIcon({
-        className: 'custom-div-icon',
-        html: `<div style="background:${color};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:bold;">${item['星等'] || ''}</div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
+      const marker = L.circleMarker(latlng, {
+        radius: 8,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.8
       });
-
-      const marker = L.marker(latlng, { icon });
 
       let popupHtml = "<div class='popup-content'>";
       popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
@@ -117,45 +113,78 @@
       popupHtml += "</div>";
 
       marker.bindPopup(popupHtml);
-      markers.addLayer(marker);
       return { marker, item };
     }
 
     async function loadData() {
       markers.clearLayers();
-      markerList.length = 0;
+      markerList = [];
       const response = await fetch(dataUrl);
       const records = await response.json();
 
-      for (const item of records) {
+      const assignSet = new Set();
+
+      records.forEach(item => {
         const m = createMarker(item);
-        if (m) markerList.push(m);
-      }
+        if (m) {
+          markerList.push(m);
+          assignSet.add(item['Assign to']);
+        }
+      });
+
       map.addLayer(markers);
+      updateAssignDropdown(assignSet);
+      updateLegend();
       applyFilter();
+    }
+
+    function updateAssignDropdown(assignSet) {
+      const select = document.getElementById('assignGroup');
+      select.innerHTML = '<option value="">指派人員</option>';
+      [...assignSet].forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+      });
+    }
+
+    function updateLegend() {
+      const legend = document.getElementById('legend');
+      legend.innerHTML = '';
+      for (const [assign, color] of Object.entries(assignColorMap)) {
+        legend.innerHTML += `<div><span style="background:${color}"></span> ${assign}</div>`;
+      }
     }
 
     function applyFilter() {
       const nameText = document.getElementById('nameFilter').value.toLowerCase();
       const cardText = document.getElementById('cardFilter').value.toLowerCase();
+      const assignFilter = document.getElementById('assignGroup').value;
+      const sortBy = document.getElementById('sortOption').value;
 
-      markers.clearLayers();
-
-      markerList.forEach(({ marker, item }) => {
+      let filtered = markerList.filter(({ item }) => {
         const name = (item['Name'] || '').toLowerCase();
         const card = (item['區域卡'] || '').toString().toLowerCase();
-        const visible = name.includes(nameText) && card.includes(cardText);
-
-        if (visible) {
-          markers.addLayer(marker);
-        }
+        const assign = item['Assign to'] || '';
+        return name.includes(nameText) && card.includes(cardText) && (!assignFilter || assign === assignFilter);
       });
+
+      if (sortBy === '星等') {
+        filtered.sort((a, b) => (b.item['星等'] || '').length - (a.item['星等'] || '').length);
+      } else if (sortBy === '拜訪日期') {
+        filtered.sort((a, b) => new Date(b.item['拜訪日期']) - new Date(a.item['拜訪日期']));
+      }
+
+      markers.clearLayers();
+      filtered.forEach(({ marker }) => markers.addLayer(marker));
     }
 
     document.getElementById('nameFilter').addEventListener('input', applyFilter);
     document.getElementById('cardFilter').addEventListener('input', applyFilter);
+    document.getElementById('assignGroup').addEventListener('change', applyFilter);
+    document.getElementById('sortOption').addEventListener('change', applyFilter);
 
-    // 每 10 分鐘自動更新
     loadData();
     setInterval(loadData, 10 * 60 * 1000);
   </script>
