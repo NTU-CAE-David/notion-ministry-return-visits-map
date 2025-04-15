@@ -48,29 +48,37 @@
     }
 
     async function loadData() {
-      const response = await fetch(dataUrl);
-      const records = await response.json();
-
-      for (const item of records) {
-        const address = item['地址'];
-        const latlng = await geocode(address);
-
-        if (!latlng) {
-          console.warn("❌ 地址轉換失敗：", address);
-          continue;
-        }
-
-        console.log("✅ 成功轉換地址：", address, "→", latlng);
-
-        let popupHtml = "<div class='popup-content'>";
-        for (const key in item) {
-          if (item[key]) {
-            popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
+      try {
+        const response = await fetch(dataUrl);
+        const records = await response.json();
+    
+        console.log("✅ JSON 資料數量：", records.length);
+    
+        for (const item of records) {
+          const address = item['地址'];
+          console.log("查詢地址：", address);
+    
+          const latlng = await geocode(address);
+    
+          if (!latlng) {
+            console.warn("❌ 地址轉換失敗：", address);
+            continue;
           }
+    
+          console.log("✅ 地址成功轉換：", address, latlng);
+    
+          let popupHtml = "<div class='popup-content'>";
+          for (const key in item) {
+            if (item[key]) {
+              popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
+            }
+          }
+          popupHtml += "</div>";
+    
+          L.marker(latlng).addTo(map).bindPopup(popupHtml);
         }
-        popupHtml += "</div>";
-
-        L.marker(latlng).addTo(map).bindPopup(popupHtml);
+      } catch (e) {
+        console.error("資料載入錯誤：", e);
       }
     }
 
