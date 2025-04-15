@@ -44,6 +44,16 @@
       margin-right: 6px;
       vertical-align: middle;
     }
+    .nav-button {
+      display: inline-block;
+      background: #1E90FF;
+      color: white;
+      padding: 6px 12px;
+      margin-top: 5px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -91,7 +101,14 @@
 
       const latlng = [parseFloat(match[1]), parseFloat(match[2])];
       const color = getColorByAssign(item['Assign to']);
-      const gmap = item['Google Map'] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item['地址'])}`;
+
+      let gmap = item['Google Map'];
+      if (!gmap) {
+        const lat = match[1];
+        const lng = match[2];
+        gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+
       const notionUrl = item['notion database'] || 'https://www.notion.so/ntu-cae-david/1d5476806c8d4e08a2c1689efd62e268?v=c7100548bfdc4712a041e4aff362f967&pvs=4';
 
       const marker = L.circleMarker(latlng, {
@@ -108,7 +125,7 @@
       popupHtml += `星等：${item['星等']}<br>`;
       popupHtml += `地址：${item['地址']}<br>`;
       if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
-      popupHtml += `<a href="${gmap}" target="_blank">🧭 Google 導航</a><br>`;
+      popupHtml += `<a href="${gmap}" target="_blank" class="nav-button">🧭 點我導航</a><br>`;
       popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
       popupHtml += "</div>";
 
@@ -186,7 +203,6 @@
     document.getElementById('sortOption').addEventListener('change', applyFilter);
 
     loadData();
-    setInterval(loadData, 10 * 60 * 1000);
   </script>
 </body>
 </html>
