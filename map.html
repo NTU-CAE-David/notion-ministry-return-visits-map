@@ -2,9 +2,11 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Notion 續訪地址互動地圖 Pro 版</title>
+  <title>Notion 經緯度地圖 Pro 版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
   <style>
     body { margin: 0; }
     #map { height: 100vh; }
@@ -19,34 +21,59 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       border-radius: 6px;
     }
-    input, select {
+    input {
       margin-bottom: 5px;
       width: 160px;
       padding: 3px;
+    }
+    .legend {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .legend div { margin-bottom: 4px; }
+    .legend span {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 6px;
+      vertical-align: middle;
     }
   </style>
 </head>
 <body>
   <div class="controls">
     <input type="text" id="nameFilter" placeholder="搜尋姓名...">
-    <input type="text" id="areaFilter" placeholder="搜尋區域...">
+    <input type="text" id="cardFilter" placeholder="搜尋區域卡...">
   </div>
   <div id="map"></div>
+  <div class="legend">
+    <div><span style="background:#aaa"></span> 🌟</div>
+    <div><span style="background:#87CEEB"></span> 🌟🌟</div>
+    <div><span style="background:#1E90FF"></span> 🌟🌟🌟</div>
+    <div><span style="background:#4169E1"></span> 🌟🌟🌟🌟</div>
+    <div><span style="background:#8A2BE2"></span> 🌟🌟🌟🌟🌟</div>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
-    const map = L.map('map').setView([25.038, 121.563], 12); // 台北預設
+    const map = L.map('map').setView([25.038, 121.563], 12);
 
-    // 底圖設定
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'Map data © OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map);
 
-    // JSON API 連結
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
 
-    const markers = [];
+    const markers = L.markerClusterGroup();
+    const markerList = [];
 
     function getColorByRating(rating) {
       switch (rating) {
@@ -69,61 +96,68 @@
       const gmap = item['Google Map'] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item['地址'])}`;
       const notionUrl = item['notion database'] || '#';
 
-      const marker = L.circleMarker(latlng, {
-        radius: 8,
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.8
+      const icon = L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div style="background:${color};border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:bold;">${item['星等'] || ''}</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
       });
+
+      const marker = L.marker(latlng, { icon });
 
       let popupHtml = "<div class='popup-content'>";
       popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
       popupHtml += `年紀：${item['年紀']}<br>`;
-      popupHtml += `區域：${item['區域']}<br>`;
+      popupHtml += `區域卡：${item['區域卡']}<br>`;
       popupHtml += `星等：${item['星等']}<br>`;
       popupHtml += `地址：${item['地址']}<br>`;
       if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
-      popupHtml += `<a href="${gmap}" target="_blank">🧽 Google 導航</a><br>`;
+      popupHtml += `<a href="${gmap}" target="_blank">🧭 Google 導航</a><br>`;
       popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
       popupHtml += "</div>";
 
       marker.bindPopup(popupHtml);
-      marker.addTo(map);
-
+      markers.addLayer(marker);
       return { marker, item };
     }
 
     async function loadData() {
+      markers.clearLayers();
+      markerList.length = 0;
       const response = await fetch(dataUrl);
       const records = await response.json();
 
       for (const item of records) {
-        const markerObj = createMarker(item);
-        if (markerObj) markers.push(markerObj);
+        const m = createMarker(item);
+        if (m) markerList.push(m);
       }
+      map.addLayer(markers);
+      applyFilter();
     }
 
     function applyFilter() {
       const nameText = document.getElementById('nameFilter').value.toLowerCase();
-      const areaText = document.getElementById('areaFilter').value.toLowerCase();
+      const cardText = document.getElementById('cardFilter').value.toLowerCase();
 
-      markers.forEach(({ marker, item }) => {
+      markers.clearLayers();
+
+      markerList.forEach(({ marker, item }) => {
         const name = (item['Name'] || '').toLowerCase();
-        const area = (item['區域'] || '').toLowerCase();
-        const visible = name.includes(nameText) && area.includes(areaText);
+        const card = (item['區域卡'] || '').toString().toLowerCase();
+        const visible = name.includes(nameText) && card.includes(cardText);
 
         if (visible) {
-          marker.addTo(map);
-        } else {
-          marker.remove();
+          markers.addLayer(marker);
         }
       });
     }
 
     document.getElementById('nameFilter').addEventListener('input', applyFilter);
-    document.getElementById('areaFilter').addEventListener('input', applyFilter);
+    document.getElementById('cardFilter').addEventListener('input', applyFilter);
 
+    // 每 10 分鐘自動更新
     loadData();
+    setInterval(loadData, 10 * 60 * 1000);
   </script>
 </body>
 </html>
