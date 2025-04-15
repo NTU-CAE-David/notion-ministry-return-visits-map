@@ -20,7 +20,7 @@
 
 ```
 notion-map-project/
-├─ map.html         # Leaflet 地圖前端頁面
+├─ map.html           # Leaflet 地圖前端頁面
 ├─ AppScript.gs       # Google Apps Script 腳本（擷取 Notion 並寫入 Sheet）
 └─ README.md          # 本說明文件
 ```
