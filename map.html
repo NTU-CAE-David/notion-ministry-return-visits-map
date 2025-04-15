@@ -2,21 +2,35 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Notion 續訪地址互動地圖</title>
+  <title>Notion 續訪地址互動地圖 Pro 版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    #map {
-      height: 100vh;
+    body { margin: 0; }
+    #map { height: 100vh; }
+    .popup-content { font-size: 14px; line-height: 1.4; }
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      z-index: 1000;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      border-radius: 6px;
     }
-    .popup-content {
-      font-size: 14px;
-      line-height: 1.4;
+    input, select {
+      margin-bottom: 5px;
+      width: 160px;
+      padding: 3px;
     }
   </style>
 </head>
-
 <body>
+  <div class="controls">
+    <input type="text" id="nameFilter" placeholder="搜尋姓名...">
+    <input type="text" id="areaFilter" placeholder="搜尋區域...">
+  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -32,41 +46,82 @@
     // JSON API 連結
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
 
+    const markers = [];
+
+    function getColorByRating(rating) {
+      switch (rating) {
+        case "🌟": return "#aaa";
+        case "🌟🌟": return "#87CEEB";
+        case "🌟🌟🌟": return "#1E90FF";
+        case "🌟🌟🌟🌟": return "#4169E1";
+        case "🌟🌟🌟🌟🌟": return "#8A2BE2";
+        default: return "gray";
+      }
+    }
+
+    function createMarker(item) {
+      const latlngRaw = item['(lat, lng)'];
+      const match = latlngRaw?.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
+      if (!match) return null;
+
+      const latlng = [parseFloat(match[1]), parseFloat(match[2])];
+      const color = getColorByRating(item['星等']);
+      const gmap = item['Google Map'] || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item['地址'])}`;
+      const notionUrl = item['notion database'] || '#';
+
+      const marker = L.circleMarker(latlng, {
+        radius: 8,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.8
+      });
+
+      let popupHtml = "<div class='popup-content'>";
+      popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
+      popupHtml += `年紀：${item['年紀']}<br>`;
+      popupHtml += `區域：${item['區域']}<br>`;
+      popupHtml += `星等：${item['星等']}<br>`;
+      popupHtml += `地址：${item['地址']}<br>`;
+      if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
+      popupHtml += `<a href="${gmap}" target="_blank">🧽 Google 導航</a><br>`;
+      popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
+      popupHtml += "</div>";
+
+      marker.bindPopup(popupHtml);
+      marker.addTo(map);
+
+      return { marker, item };
+    }
+
     async function loadData() {
       const response = await fetch(dataUrl);
       const records = await response.json();
 
-      console.log("✅ 共載入資料筆數：", records.length);
-
       for (const item of records) {
-        const latlngRaw = item['(lat, lng)'];
-        if (!latlngRaw) {
-          console.warn("⚠️ 缺少經緯度欄位，略過：", item["地址"]);
-          continue;
-        }
-
-        const match = latlngRaw.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
-        if (!match) {
-          console.warn("❌ 無法解析經緯度格式：", latlngRaw);
-          continue;
-        }
-
-        const lat = parseFloat(match[1]);
-        const lng = parseFloat(match[2]);
-        const latlng = [lat, lng];
-
-        // 建立 popup HTML
-        let popupHtml = "<div class='popup-content'>";
-        for (const key in item) {
-          if (item[key]) {
-            popupHtml += `<strong>${key}：</strong> ${item[key]}<br>`;
-          }
-        }
-        popupHtml += "</div>";
-
-        L.marker(latlng).addTo(map).bindPopup(popupHtml);
+        const markerObj = createMarker(item);
+        if (markerObj) markers.push(markerObj);
       }
     }
+
+    function applyFilter() {
+      const nameText = document.getElementById('nameFilter').value.toLowerCase();
+      const areaText = document.getElementById('areaFilter').value.toLowerCase();
+
+      markers.forEach(({ marker, item }) => {
+        const name = (item['Name'] || '').toLowerCase();
+        const area = (item['區域'] || '').toLowerCase();
+        const visible = name.includes(nameText) && area.includes(areaText);
+
+        if (visible) {
+          marker.addTo(map);
+        } else {
+          marker.remove();
+        }
+      });
+    }
+
+    document.getElementById('nameFilter').addEventListener('input', applyFilter);
+    document.getElementById('areaFilter').addEventListener('input', applyFilter);
 
     loadData();
   </script>
