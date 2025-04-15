@@ -34,7 +34,7 @@
     // 將地址轉為經緯度（使用 Nominatim）
     async function geocode(address) {
       const fullAddress = address; // 如果地址不完整，自動補齊
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`;
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&format=json`;
       try {
         const response = await fetch(url);
         const results = await response.json();
