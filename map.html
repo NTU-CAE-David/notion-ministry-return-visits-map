@@ -13,7 +13,7 @@
     .popup-content { font-size: 14px; line-height: 1.4; }
     .controls {
       position: absolute;
-      top: 60px;
+      top: 10px;
       left: 10px;
       background: white;
       padding: 8px;
@@ -21,7 +21,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       border-radius: 6px;
     }
-    input, select, button {
+    input, select {
       margin-bottom: 5px;
       width: 160px;
       padding: 3px;
@@ -54,11 +54,6 @@
       text-decoration: none;
       font-weight: bold;
     }
-    .status {
-      font-size: 12px;
-      color: #555;
-      margin-top: 5px;
-    }
   </style>
 </head>
 <body>
@@ -73,15 +68,12 @@
     <select id="assignGroup">
       <option value="">指派人員</option>
     </select>
-    <button id="updateBtn">🔄 手動更新 Notion</button>
-    <div class="status" id="updateStatus">尚未觸發更新</div>
   </div>
   <div id="map"></div>
   <div class="legend" id="legend"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-
   <script>
     const map = L.map('map').setView([25.038, 121.563], 12);
 
@@ -91,35 +83,55 @@
     }).addTo(map);
 
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
-    const token = "c66c5f17-8f98-4a93-a041-4e9e2309e5b2";
-    const triggerUrl = `${dataUrl}?token=${token}`;
     const markers = L.markerClusterGroup();
     let markerList = [];
     const assignColorMap = {};
 
-    document.getElementById("updateBtn").addEventListener("click", () => {
-      const status = document.getElementById("updateStatus");
-      status.textContent = "正在觸發更新...";
+    function getColorByAssign(assign) {
+      if (!assignColorMap[assign]) {
+        assignColorMap[assign] = '#' + Math.floor(Math.random()*16777215).toString(16);
+      }
+      return assignColorMap[assign];
+    }
 
-      fetch(triggerUrl)
-        .then(res => res.json())
-        .then(msg => {
-          console.log("🟢 App Script 更新結果：", msg);
-          if (msg.count !== undefined) {
-            status.textContent = `✅ 已觸發更新 (${msg.count}/2)`;
-          } else if (msg.error) {
-            status.textContent = `⚠️ ${msg.error}`;
-          } else {
-            status.textContent = "⚠️ 回傳格式錯誤，請檢查 doGet() 是否有 JSON 輸出";
-          }
-          loadData();
-        })
-        .catch(err => {
-          console.error("❌ App Script 更新失敗：", err);
-          status.textContent = "❌ 無法更新資料，請查看 console log。";
-          loadData();
-        });
-    });
+    function createMarker(item) {
+      const latlngRaw = item['(lat, lng)'];
+      const match = latlngRaw?.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
+      if (!match) return null;
+
+      const latlng = [parseFloat(match[1]), parseFloat(match[2])];
+      const color = getColorByAssign(item['Assign to']);
+
+      let gmap = item['Google Map'];
+      if (!gmap) {
+        const lat = match[1];
+        const lng = match[2];
+        gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+
+      const notionUrl = item['notion database'] || 'https://www.notion.so/ntu-cae-david/1d5476806c8d4e08a2c1689efd62e268?v=c7100548bfdc4712a041e4aff362f967&pvs=4';
+
+      const marker = L.circleMarker(latlng, {
+        radius: 8,
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.8
+      });
+
+      let popupHtml = "<div class='popup-content'>";
+      popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
+      popupHtml += `年紀：${item['年紀']}<br>`;
+      popupHtml += `區域卡：${item['區域卡']}<br>`;
+      popupHtml += `星等：${item['星等']}<br>`;
+      popupHtml += `地址：${item['地址']}<br>`;
+      if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
+      popupHtml += `<a href="${gmap}" target="_blank" class="nav-button">🧭 點我導航</a><br>`;
+      popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
+      popupHtml += "</div>";
+
+      marker.bindPopup(popupHtml);
+      return { marker, item };
+    }
 
     async function loadData() {
       markers.clearLayers();
@@ -130,44 +142,11 @@
       const assignSet = new Set();
 
       records.forEach(item => {
-        const latlngRaw = item['(lat, lng)'];
-        const match = latlngRaw?.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
-        if (!match) return;
-
-        const latlng = [parseFloat(match[1]), parseFloat(match[2])];
-        const color = getColorByAssign(item['Assign to']);
-
-        let gmap = item['Google Map'];
-        if (!gmap) {
-          const lat = match[1];
-          const lng = match[2];
-          gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        const m = createMarker(item);
+        if (m) {
+          markerList.push(m);
+          assignSet.add(item['Assign to']);
         }
-
-        const notionUrl = item['notion database'] || 'https://www.notion.so/ntu-cae-david/1d5476806c8d4e08a2c1689efd62e268?v=c7100548bfdc4712a041e4aff362f967&pvs=4';
-
-        const marker = L.circleMarker(latlng, {
-          radius: 8,
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.8
-        });
-
-        let popupHtml = "<div class='popup-content'>";
-        popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
-        popupHtml += `年紀：${item['年紀']}<br>`;
-        popupHtml += `區域卡：${item['區域卡']}<br>`;
-        popupHtml += `星等：${item['星等']}<br>`;
-        popupHtml += `地址：${item['地址']}<br>`;
-        if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
-        popupHtml += `<a href="${gmap}" target="_blank" class="nav-button">🧭 點我導航</a><br>`;
-        popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
-        popupHtml += "</div>";
-
-        marker.bindPopup(popupHtml);
-        markers.addLayer(marker);
-        markerList.push({ marker, item });
-        assignSet.add(item['Assign to']);
       });
 
       map.addLayer(markers);
