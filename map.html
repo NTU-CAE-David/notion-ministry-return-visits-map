@@ -21,7 +21,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       border-radius: 6px;
     }
-    input, select {
+    input, select, button {
       margin-bottom: 5px;
       width: 160px;
       padding: 3px;
@@ -54,6 +54,11 @@
       text-decoration: none;
       font-weight: bold;
     }
+    .status {
+      font-size: 12px;
+      color: #555;
+      margin-top: 5px;
+    }
   </style>
 </head>
 <body>
@@ -68,12 +73,15 @@
     <select id="assignGroup">
       <option value="">指派人員</option>
     </select>
+    <button id="updateBtn">🔄 手動更新 Notion</button>
+    <div class="status" id="updateStatus">尚未觸發更新</div>
   </div>
   <div id="map"></div>
   <div class="legend" id="legend"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
   <script>
     const map = L.map('map').setView([25.038, 121.563], 12);
 
@@ -83,9 +91,31 @@
     }).addTo(map);
 
     const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
+    const token = "c66c5f17-8f98-4a93-a041-4e9e2309e5b2";
+    const triggerUrl = `${dataUrl}?token=${token}`;
     const markers = L.markerClusterGroup();
     let markerList = [];
     const assignColorMap = {};
+
+    document.getElementById("updateBtn").addEventListener("click", () => {
+      const status = document.getElementById("updateStatus");
+      status.textContent = "正在觸發更新...";
+
+      fetch(triggerUrl)
+        .then(res => res.json())
+        .then(msg => {
+          console.log("🟢 App Script 更新結果：", msg);
+          status.textContent = msg.count !== undefined
+            ? `✅ 已觸發更新 (${msg.count}/2)`
+            : msg.error || "未知錯誤";
+          loadData();
+        })
+        .catch(err => {
+          console.error("❌ App Script 更新失敗：", err);
+          status.textContent = "❌ 無法更新資料";
+          loadData();
+        });
+    });
 
     function getColorByAssign(assign) {
       if (!assignColorMap[assign]) {
@@ -202,6 +232,7 @@
     document.getElementById('assignGroup').addEventListener('change', applyFilter);
     document.getElementById('sortOption').addEventListener('change', applyFilter);
 
+    // 初始直接載入現有資料
     loadData();
   </script>
 </body>
