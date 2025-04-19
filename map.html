@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Notion 續訪地址互動地圖 Pro 版</title>
+  <title>Notion 續訪地址互動地圖 Pro+</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
@@ -10,7 +10,9 @@
   <style>
     body { margin: 0; }
     #map { height: 100vh; }
+
     .popup-content { font-size: 14px; line-height: 1.4; }
+
     .controls {
       position: absolute;
       top: 10px;
@@ -20,12 +22,29 @@
       z-index: 1000;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       border-radius: 6px;
+      transition: all 0.3s;
     }
-    input, select {
-      margin-bottom: 5px;
-      width: 160px;
-      padding: 3px;
+
+    .controls.collapsed {
+      transform: translateY(-120%);
+      opacity: 0;
+      pointer-events: none;
     }
+
+    .control-toggle {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: #333;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      z-index: 1100;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
     .legend {
       position: absolute;
       bottom: 10px;
@@ -36,7 +55,9 @@
       font-size: 13px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
+
     .legend div { margin-bottom: 4px; }
+
     .legend span {
       display: inline-block;
       width: 12px;
@@ -44,6 +65,7 @@
       margin-right: 6px;
       vertical-align: middle;
     }
+
     .nav-button {
       display: inline-block;
       background: #1E90FF;
@@ -54,155 +76,214 @@
       text-decoration: none;
       font-weight: bold;
     }
+
+    .leaflet-control-zoom {
+      margin-bottom: 60px !important;
+      margin-right: 10px !important;
+    }
+
+    .location-button, .theme-toggle {
+      position: absolute;
+      right: 10px;
+      z-index: 1100;
+      background: white;
+      border-radius: 6px;
+      padding: 6px 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .location-button { bottom: 80px; }
+    .theme-toggle { bottom: 40px; }
   </style>
 </head>
 <body>
-  <div class="controls">
-    <input type="text" id="nameFilter" placeholder="搜尋姓名...">
-    <input type="text" id="cardFilter" placeholder="搜尋區域卡...">
-    <select id="sortOption">
-      <option value="">排序方式</option>
-      <option value="星等">星等</option>
-      <option value="拜訪日期">拜訪日期</option>
-    </select>
-    <select id="assignGroup">
-      <option value="">指派人員</option>
-    </select>
-  </div>
-  <div id="map"></div>
-  <div class="legend" id="legend"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-  <script>
-    const map = L.map('map').setView([25.038, 121.563], 12);
+<div id="map"></div>
+<div class="control-toggle" onclick="toggleControls()">📂 篩選</div>
+<div class="location-button" onclick="locateMe()">📍 目前位置</div>
+<div class="theme-toggle" onclick="toggleTheme()">🌗 夜間模式</div>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: 'Map data © OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
+<div class="controls" id="controlsPanel">
+  <input type="text" id="nameFilter" placeholder="搜尋姓名...">
+  <input type="text" id="cardFilter" placeholder="搜尋區域卡...">
+  <select id="sortOption">
+    <option value="">排序方式</option>
+    <option value="星等">星等</option>
+    <option value="拜訪日期">拜訪日期</option>
+  </select>
+  <select id="assignGroup">
+    <option value="">指派人員</option>
+  </select>
+</div>
 
-    const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
-    const markers = L.markerClusterGroup();
-    let markerList = [];
-    const assignColorMap = {};
+<div class="legend" id="legend"></div>
 
-    function getColorByAssign(assign) {
-      if (!assignColorMap[assign]) {
-        assignColorMap[assign] = '#' + Math.floor(Math.random()*16777215).toString(16);
-      }
-      return assignColorMap[assign];
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<script>
+  let lightTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data © OpenStreetMap contributors',
+    maxZoom: 19
+  });
+
+  let darkTile = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: 'Map tiles © CartoDB',
+    maxZoom: 19
+  });
+
+  const map = L.map('map', { zoomControl: false, layers: [lightTile] }).setView([25.038, 121.563], 12);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
+  const markers = L.markerClusterGroup();
+  let markerList = [];
+  const assignColorMap = {};
+
+  function getColorByAssign(assign) {
+    if (!assignColorMap[assign]) {
+      assignColorMap[assign] = '#' + Math.floor(Math.random() * 16777215).toString(16);
+    }
+    return assignColorMap[assign];
+  }
+
+  function createMarker(item) {
+    const latlngRaw = item['(lat, lng)'];
+    const match = latlngRaw?.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
+    if (!match) return null;
+
+    const latlng = [parseFloat(match[1]), parseFloat(match[2])];
+    const color = getColorByAssign(item['Assign to']);
+
+    let gmap = item['Google Map'];
+    if (!gmap) {
+      const lat = match[1];
+      const lng = match[2];
+      gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     }
 
-    function createMarker(item) {
-      const latlngRaw = item['(lat, lng)'];
-      const match = latlngRaw?.match(/\(?\s*([\d.]+)\s*,\s*([\d.]+)\s*\)?/);
-      if (!match) return null;
+    const notionUrl = item['notion database'] || '#';
 
-      const latlng = [parseFloat(match[1]), parseFloat(match[2])];
-      const color = getColorByAssign(item['Assign to']);
+    const marker = L.circleMarker(latlng, {
+      radius: 8,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.8
+    });
 
-      let gmap = item['Google Map'];
-      if (!gmap) {
-        const lat = match[1];
-        const lng = match[2];
-        gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    let popupHtml = "<div class='popup-content'>";
+    popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
+    popupHtml += `年紀：${item['年紀']}<br>`;
+    popupHtml += `區域卡：${item['區域卡']}<br>`;
+    popupHtml += `星等：${item['星等']}<br>`;
+    popupHtml += `地址：${item['地址']}<br>`;
+    if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
+    popupHtml += `<a href="${gmap}" target="_blank" class="nav-button">🧭 點我導航</a><br>`;
+    popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
+    popupHtml += "</div>";
+
+    marker.bindPopup(popupHtml);
+    return { marker, item };
+  }
+
+  async function loadData() {
+    markers.clearLayers();
+    markerList = [];
+    const response = await fetch(dataUrl);
+    const records = await response.json();
+    const assignSet = new Set();
+
+    records.forEach(item => {
+      const m = createMarker(item);
+      if (m) {
+        markerList.push(m);
+        assignSet.add(item['Assign to']);
       }
+    });
 
-      const notionUrl = item['notion database'] || 'https://www.notion.so/ntu-cae-david/1d5476806c8d4e08a2c1689efd62e268?v=c7100548bfdc4712a041e4aff362f967&pvs=4';
+    map.addLayer(markers);
+    updateAssignDropdown(assignSet);
+    updateLegend();
+    applyFilter();
+  }
 
-      const marker = L.circleMarker(latlng, {
+  function updateAssignDropdown(assignSet) {
+    const select = document.getElementById('assignGroup');
+    select.innerHTML = '<option value="">指派人員</option>';
+    [...assignSet].forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+  }
+
+  function updateLegend() {
+    const legend = document.getElementById('legend');
+    legend.innerHTML = '';
+    for (const [assign, color] of Object.entries(assignColorMap)) {
+      legend.innerHTML += `<div><span style="background:${color}"></span> ${assign}</div>`;
+    }
+  }
+
+  function applyFilter() {
+    const nameText = document.getElementById('nameFilter').value.toLowerCase();
+    const cardText = document.getElementById('cardFilter').value.toLowerCase();
+    const assignFilter = document.getElementById('assignGroup').value;
+    const sortBy = document.getElementById('sortOption').value;
+
+    let filtered = markerList.filter(({ item }) => {
+      const name = (item['Name'] || '').toLowerCase();
+      const card = (item['區域卡'] || '').toString().toLowerCase();
+      const assign = item['Assign to'] || '';
+      return name.includes(nameText) && card.includes(cardText) && (!assignFilter || assign === assignFilter);
+    });
+
+    if (sortBy === '星等') {
+      filtered.sort((a, b) => (b.item['星等'] || '').length - (a.item['星等'] || '').length);
+    } else if (sortBy === '拜訪日期') {
+      filtered.sort((a, b) => new Date(b.item['拜訪日期']) - new Date(a.item['拜訪日期']));
+    }
+
+    markers.clearLayers();
+    filtered.forEach(({ marker }) => markers.addLayer(marker));
+  }
+
+  function locateMe() {
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      map.setView([lat, lng], 16);
+      L.circleMarker([lat, lng], {
         radius: 8,
-        color: color,
-        fillColor: color,
+        color: "#ff0000",
+        fillColor: "#ff0000",
         fillOpacity: 0.8
-      });
+      }).addTo(map).bindPopup("📍 您目前的位置").openPopup();
+    });
+  }
 
-      let popupHtml = "<div class='popup-content'>";
-      popupHtml += `<strong>${item['Name'] || '未命名'}</strong><br>`;
-      popupHtml += `年紀：${item['年紀']}<br>`;
-      popupHtml += `區域卡：${item['區域卡']}<br>`;
-      popupHtml += `星等：${item['星等']}<br>`;
-      popupHtml += `地址：${item['地址']}<br>`;
-      if (item['備註']) popupHtml += `備註：${item['備註']}<br>`;
-      popupHtml += `<a href="${gmap}" target="_blank" class="nav-button">🧭 點我導航</a><br>`;
-      popupHtml += `<a href="${notionUrl}" target="_blank">📓 Notion Database</a>`;
-      popupHtml += "</div>";
-
-      marker.bindPopup(popupHtml);
-      return { marker, item };
+  function toggleTheme() {
+    if (map.hasLayer(lightTile)) {
+      map.removeLayer(lightTile);
+      map.addLayer(darkTile);
+    } else {
+      map.removeLayer(darkTile);
+      map.addLayer(lightTile);
     }
+  }
 
-    async function loadData() {
-      markers.clearLayers();
-      markerList = [];
-      const response = await fetch(dataUrl);
-      const records = await response.json();
+  function toggleControls() {
+    document.getElementById("controlsPanel").classList.toggle("collapsed");
+  }
 
-      const assignSet = new Set();
+  document.getElementById('nameFilter').addEventListener('input', applyFilter);
+  document.getElementById('cardFilter').addEventListener('input', applyFilter);
+  document.getElementById('assignGroup').addEventListener('change', applyFilter);
+  document.getElementById('sortOption').addEventListener('change', applyFilter);
 
-      records.forEach(item => {
-        const m = createMarker(item);
-        if (m) {
-          markerList.push(m);
-          assignSet.add(item['Assign to']);
-        }
-      });
-
-      map.addLayer(markers);
-      updateAssignDropdown(assignSet);
-      updateLegend();
-      applyFilter();
-    }
-
-    function updateAssignDropdown(assignSet) {
-      const select = document.getElementById('assignGroup');
-      select.innerHTML = '<option value="">指派人員</option>';
-      [...assignSet].forEach(name => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        select.appendChild(option);
-      });
-    }
-
-    function updateLegend() {
-      const legend = document.getElementById('legend');
-      legend.innerHTML = '';
-      for (const [assign, color] of Object.entries(assignColorMap)) {
-        legend.innerHTML += `<div><span style="background:${color}"></span> ${assign}</div>`;
-      }
-    }
-
-    function applyFilter() {
-      const nameText = document.getElementById('nameFilter').value.toLowerCase();
-      const cardText = document.getElementById('cardFilter').value.toLowerCase();
-      const assignFilter = document.getElementById('assignGroup').value;
-      const sortBy = document.getElementById('sortOption').value;
-
-      let filtered = markerList.filter(({ item }) => {
-        const name = (item['Name'] || '').toLowerCase();
-        const card = (item['區域卡'] || '').toString().toLowerCase();
-        const assign = item['Assign to'] || '';
-        return name.includes(nameText) && card.includes(cardText) && (!assignFilter || assign === assignFilter);
-      });
-
-      if (sortBy === '星等') {
-        filtered.sort((a, b) => (b.item['星等'] || '').length - (a.item['星等'] || '').length);
-      } else if (sortBy === '拜訪日期') {
-        filtered.sort((a, b) => new Date(b.item['拜訪日期']) - new Date(a.item['拜訪日期']));
-      }
-
-      markers.clearLayers();
-      filtered.forEach(({ marker }) => markers.addLayer(marker));
-    }
-
-    document.getElementById('nameFilter').addEventListener('input', applyFilter);
-    document.getElementById('cardFilter').addEventListener('input', applyFilter);
-    document.getElementById('assignGroup').addEventListener('change', applyFilter);
-    document.getElementById('sortOption').addEventListener('change', applyFilter);
-
-    loadData();
-  </script>
+  loadData();
+</script>
 </body>
 </html>
