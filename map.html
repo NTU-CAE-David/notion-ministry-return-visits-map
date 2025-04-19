@@ -134,7 +134,7 @@
   });
 
   const map = L.map('map', { zoomControl: false, layers: [lightTile] }).setView([25.038, 121.563], 12);
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
+  L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
   const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
   const markers = L.markerClusterGroup();
