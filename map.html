@@ -1,5 +1,3 @@
-<!DOCTYPE html>
-<html>
 <head>
   <meta charset="utf-8" />
   <title>Notion 續訪地址互動地圖 Pro+</title>
@@ -31,19 +29,23 @@
       pointer-events: none;
     }
 
-    .control-toggle {
+    .control-toggle,
+    .location-button,
+    .theme-toggle {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      background: #333;
-      color: white;
-      padding: 6px 10px;
-      border-radius: 6px;
+      right: 10px;
       z-index: 1100;
+      background: white;
+      border-radius: 6px;
+      padding: 6px 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       font-size: 14px;
       cursor: pointer;
-      user-select: none;
     }
+
+    .control-toggle { bottom: 100px; }
+    .location-button { bottom: 60px; }
+    .theme-toggle { bottom: 20px; }
 
     .legend {
       position: absolute;
@@ -78,33 +80,21 @@
     }
 
     .leaflet-control-zoom {
+      margin-left: 10px !important;
       margin-bottom: 60px !important;
-      margin-right: 10px !important;
     }
-
-    .location-button, .theme-toggle {
-      position: absolute;
-      right: 10px;
-      z-index: 1100;
-      background: white;
-      border-radius: 6px;
-      padding: 6px 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .location-button { bottom: 80px; }
-    .theme-toggle { bottom: 40px; }
   </style>
 </head>
 <body>
 
 <div id="map"></div>
+
+<!-- 🔘 右下角控制群 -->
 <div class="control-toggle" onclick="toggleControls()">📂 篩選</div>
 <div class="location-button" onclick="locateMe()">📍 目前位置</div>
 <div class="theme-toggle" onclick="toggleTheme()">🌗 夜間模式</div>
 
+<!-- 🔍 篩選面板 -->
 <div class="controls" id="controlsPanel">
   <input type="text" id="nameFilter" placeholder="搜尋姓名...">
   <input type="text" id="cardFilter" placeholder="搜尋區域卡...">
@@ -118,8 +108,10 @@
   </select>
 </div>
 
+<!-- 📘 圖例 -->
 <div class="legend" id="legend"></div>
 
+<!-- 🌐 地圖 JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
 <script>
@@ -134,7 +126,7 @@
   });
 
   const map = L.map('map', { zoomControl: false, layers: [lightTile] }).setView([25.038, 121.563], 12);
-  L.control.zoom({ position: 'bottomleft' }).addTo(map);
+  L.control.zoom({ position: 'bottomleft' }).addTo(map); // ✅ 改為左下角
 
   const dataUrl = "https://script.google.com/macros/s/AKfycbx3s34E7AvuipBNUJeOT17ABAf0fizNbqP_NbpnCCF1n5w2jO-LeCcf5HEae7p2ycRc/exec";
   const markers = L.markerClusterGroup();
@@ -155,14 +147,8 @@
 
     const latlng = [parseFloat(match[1]), parseFloat(match[2])];
     const color = getColorByAssign(item['Assign to']);
-
     let gmap = item['Google Map'];
-    if (!gmap) {
-      const lat = match[1];
-      const lng = match[2];
-      gmap = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    }
-
+    if (!gmap) gmap = `https://www.google.com/maps/search/?api=1&query=${latlng[0]},${latlng[1]}`;
     const notionUrl = item['notion database'] || '#';
 
     const marker = L.circleMarker(latlng, {
@@ -286,4 +272,3 @@
   loadData();
 </script>
 </body>
-</html>
